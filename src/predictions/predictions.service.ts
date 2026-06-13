@@ -185,7 +185,7 @@ export class PredictionsService {
       take: 50,
       orderBy: { createdAt: 'desc' },
       include: {
-        user: { select: { id: true, username: true, avatar: true } },
+        user: { select: { id: true, username: true } },
         outcome: { select: { id: true, name: true } }
       }
     });

@@ -11,6 +11,7 @@ import { TransformInterceptor } from './common/interceptors/transform.intercepto
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 
 async function bootstrap() {
+  console.log('🚀 Starting Node process...');
   const logger = new Logger('Bootstrap');
   const app = await NestFactory.create(AppModule);
 

@@ -98,8 +98,8 @@ async function bootstrap() {
   }
 
   // ── Start ─────────────────────────────────────────────
-  await app.listen(port);
-  logger.log(`🚀 MatchMarket API running on http://localhost:${port}`);
+  await app.listen(port, '0.0.0.0');
+  logger.log(`🚀 MatchMarket API running on port ${port}`);
   logger.log(`📦 Environment: ${nodeEnv}`);
 }
 

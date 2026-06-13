@@ -179,6 +179,28 @@ export class PredictionsService {
     };
   }
 
+  async getMarketPredictions(marketId: string) {
+    return this.prisma.prediction.findMany({
+      where: { marketId },
+      take: 50,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        user: { select: { id: true, username: true, avatar: true } },
+        outcome: { select: { id: true, name: true } }
+      }
+    });
+  }
+
+  async getMyMarketPredictions(marketId: string, userId: string) {
+    return this.prisma.prediction.findMany({
+      where: { marketId, userId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        outcome: { select: { id: true, name: true } }
+      }
+    });
+  }
+
   async findOne(id: string, userId: string) {
     const prediction = await this.prisma.prediction.findUnique({
       where: { id },

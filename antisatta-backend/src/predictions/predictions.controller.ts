@@ -35,6 +35,20 @@ export class PredictionsController {
     return this.predictionsService.getHistory(user.id, pagination);
   }
 
+  @Get('market/:marketId')
+  @ApiOperation({ summary: 'Get recent global predictions for a market' })
+  async getMarketPredictions(@Param('marketId') marketId: string) {
+    return this.predictionsService.getMarketPredictions(marketId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('market/:marketId/me')
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Get own predictions for a specific market' })
+  async getMyMarketPredictions(@Param('marketId') marketId: string, @CurrentUser() user: any) {
+    return this.predictionsService.getMyMarketPredictions(marketId, user.id);
+  }
+
   @UseGuards(JwtAuthGuard)
   @Get(':id')
   @ApiBearerAuth('access-token')

@@ -5,14 +5,18 @@ import { useAuthStore } from '@/stores/auth-store';
 import { Coins, User as UserIcon, LogOut, Menu } from 'lucide-react';
 import { useState } from 'react';
 
-export function Navbar() {
+interface NavbarProps {
+  onMenuClick: () => void;
+}
+
+export function Navbar({ onMenuClick }: NavbarProps) {
   const { isAuthenticated, user, logout } = useAuthStore();
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
   return (
     <nav className="fixed top-0 w-full z-50 bg-white border-b border-border h-14 flex items-center px-4 md:px-6">
       <div className="flex items-center gap-4 flex-1">
-        <button className="md:hidden text-foreground">
+        <button onClick={onMenuClick} className="md:hidden text-foreground">
           <Menu className="w-5 h-5" />
         </button>
         <Link href="/" className="flex items-center -ml-2">

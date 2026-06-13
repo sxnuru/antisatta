@@ -17,11 +17,29 @@ const navItems = [
   { name: 'Profile', href: '/profile', icon: UserIcon },
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
 
   return (
-    <aside className="hidden md:flex flex-col w-56 fixed left-0 top-14 bottom-0 bg-white border-r border-border py-4 px-3">
+    <>
+      {/* Mobile Overlay */}
+      {isOpen && (
+        <div 
+          className="fixed inset-0 bg-black/20 z-30 md:hidden top-14" 
+          onClick={onClose}
+        />
+      )}
+      <aside 
+        className={cn(
+          "flex flex-col w-56 fixed left-0 top-14 bottom-0 bg-white border-r border-border py-4 px-3 z-40 transition-transform duration-200 ease-in-out md:translate-x-0",
+          isOpen ? "translate-x-0" : "-translate-x-full"
+        )}
+      >
       <div className="flex flex-col gap-0.5">
         {navItems.map((item) => {
           const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
@@ -30,6 +48,7 @@ export function Sidebar() {
             <Link
               key={item.name}
               href={item.href}
+              onClick={onClose}
               className={cn(
                 "flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-medium transition-colors",
                 isActive 
@@ -44,5 +63,6 @@ export function Sidebar() {
         })}
       </div>
     </aside>
+    </>
   );
 }

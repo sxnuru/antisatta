@@ -20,11 +20,17 @@ export default function ProfilePage() {
     enabled: !!user?.username && isAuthenticated,
   });
 
-  const { data: predictionHistory } = useQuery({
+  const { data: predictionHistory, isLoading: isLoadingHistory } = useQuery({
     queryKey: ['predictions', 'history'],
     queryFn: async () => {
-      const { data } = await apiClient.get('/predictions/history');
-      return data.data.data || [];
+      try {
+        const { data } = await apiClient.get('/predictions/history');
+        const resData = data?.data?.data || data?.data || data;
+        return Array.isArray(resData) ? resData : (resData?.data || []);
+      } catch (err) {
+        console.error('Failed to fetch prediction history:', err);
+        return [];
+      }
     },
     enabled: isAuthenticated,
   });
@@ -86,7 +92,13 @@ export default function ProfilePage() {
           <h2 className="text-sm font-bold">Recent Activity</h2>
         </div>
         
-        {predictionHistory && predictionHistory.length > 0 ? (
+        {isLoadingHistory ? (
+          <div className="p-5 space-y-4">
+            <div className="h-16 bg-secondary animate-pulse rounded-lg" />
+            <div className="h-16 bg-secondary animate-pulse rounded-lg" />
+            <div className="h-16 bg-secondary animate-pulse rounded-lg" />
+          </div>
+        ) : predictionHistory && predictionHistory.length > 0 ? (
           <div className="divide-y divide-border">
             {predictionHistory.map((prediction: any) => (
               <div key={prediction.id} className="p-5 hover:bg-neutral-50 transition-colors">
@@ -118,17 +130,21 @@ export default function ProfilePage() {
                   </div>
                 </div>
 
-                <Link href={`/markets/${prediction.market.id}`} className="block group">
-                  <h3 className="text-sm font-semibold group-hover:text-blue-600 transition-colors truncate">
-                    {prediction.market.title}
-                  </h3>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-xs text-muted-foreground">Predicted:</span>
-                    <span className="text-xs font-semibold px-2 py-0.5 bg-secondary rounded">
-                      {prediction.outcome.name}
-                    </span>
-                  </div>
-                </Link>
+                {prediction.market && prediction.outcome ? (
+                  <Link href={`/markets/${prediction.market.id}`} className="block group">
+                    <h3 className="text-sm font-semibold group-hover:text-blue-600 transition-colors truncate">
+                      {prediction.market.title}
+                    </h3>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-xs text-muted-foreground">Predicted:</span>
+                      <span className="text-xs font-semibold px-2 py-0.5 bg-secondary rounded">
+                        {prediction.outcome.name}
+                      </span>
+                    </div>
+                  </Link>
+                ) : (
+                  <div className="text-sm text-muted-foreground mt-2">Market data unavailable</div>
+                )}
               </div>
             ))}
           </div>

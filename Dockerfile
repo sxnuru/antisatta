@@ -4,12 +4,12 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 # Install dependencies
+RUN apk add --no-cache openssl
 COPY package.json package-lock.json* ./
 RUN npm ci
 
 # Copy prisma schema and generate client
 COPY prisma ./prisma/
-RUN apk add --no-cache openssl
 RUN npx prisma generate
 
 # Copy source and build

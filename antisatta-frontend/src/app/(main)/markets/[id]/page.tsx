@@ -357,7 +357,7 @@ export default function MarketDetailsPage() {
                     onChange={(e) => {
                       let val = e.target.value ? Number(e.target.value) : '';
                       if (typeof val === 'number' && val > 1000) val = 1000;
-                      setStake(val);
+                      setStake(val as number | '');
                     }}
                     placeholder="0"
                     className="w-20 bg-transparent text-right outline-none p-0 m-0 focus:ring-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"

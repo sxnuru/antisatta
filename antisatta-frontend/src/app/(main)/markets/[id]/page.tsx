@@ -319,8 +319,8 @@ export default function MarketDetailsPage() {
         </div>
 
         {/* Right Column: Betting Panel */}
-        <div className="w-full lg:w-[340px] shrink-0 flex flex-col gap-6">
-          <div className="border border-border rounded-lg p-5 sticky top-20 bg-white z-10">
+        <div className="w-full lg:w-[340px] shrink-0 flex flex-col gap-6 lg:sticky lg:top-20 lg:self-start lg:max-h-[calc(100vh-6rem)] overflow-y-auto hide-scrollbar pb-6">
+          <div className="border border-border rounded-lg p-5 bg-white">
             
             <div className="flex items-center gap-2 mb-4">
               {market.homeTeamLogo ? (

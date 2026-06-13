@@ -27,11 +27,16 @@ async function bootstrap() {
 
   // ── CORS ──────────────────────────────────────────────
   app.enableCors({
-    origin: frontendUrl,
+    origin: true, // Allow any origin to prevent Vercel preview URL issues
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
+
+  // ── Root Healthcheck ──────────────────────────────────
+  // Railway often pings '/' by default. We intercept it before the global prefix to ensure it always returns 200 OK.
+  const httpAdapter = app.getHttpAdapter();
+  httpAdapter.get('/', (req, res) => res.send('MatchMarket API is running!'));
 
   // ── Global Prefix ─────────────────────────────────────
   app.setGlobalPrefix('api');

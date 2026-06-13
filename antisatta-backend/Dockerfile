@@ -9,6 +9,7 @@ RUN npm ci
 
 # Copy prisma schema and generate client
 COPY prisma ./prisma/
+RUN apk add --no-cache openssl
 RUN npx prisma generate
 
 # Copy source and build

@@ -41,7 +41,8 @@ RUN chown -R nestjs:nestjs /app
 
 USER nestjs
 
-EXPOSE 10000
+ENV PORT=7860
+EXPOSE 7860
 
 # Run migrations then start the app
 CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main"]

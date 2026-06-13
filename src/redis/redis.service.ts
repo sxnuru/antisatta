@@ -1,6 +1,6 @@
 import { Injectable, OnModuleDestroy, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import Redis from 'ioredis';
+import { Redis } from '@upstash/redis';
 
 @Injectable()
 export class RedisService implements OnModuleDestroy {
@@ -8,42 +8,31 @@ export class RedisService implements OnModuleDestroy {
   private readonly logger = new Logger(RedisService.name);
 
   constructor(private configService: ConfigService) {
-    const redisUrl = this.configService.get<string>('REDIS_URL') || 'redis://localhost:6379';
+    const url = this.configService.get<string>('UPSTASH_REDIS_REST_URL');
+    const token = this.configService.get<string>('UPSTASH_REDIS_REST_TOKEN');
 
-    this.client = new Redis(redisUrl, {
-      maxRetriesPerRequest: 3,
-      retryStrategy: (times) => Math.min(times * 50, 2000),
-    });
-
-    this.client.on('error', (err) => {
-      this.logger.error('Redis connection error:', err);
-    });
-
-    this.client.on('connect', () => {
-      this.logger.log(`Connected to Redis at ${redisUrl}`);
-    });
-  }
-
-  async onModuleDestroy() {
-    this.client.disconnect();
-  }
-
-  async get<T = string>(key: string): Promise<T | null> {
-    const data = await this.client.get(key);
-    if (!data) return null;
-    try {
-      return JSON.parse(data) as T;
-    } catch {
-      return data as unknown as T;
+    if (url && token) {
+      this.client = new Redis({ url, token });
+      this.logger.log(`Connected to Upstash Redis REST API`);
+    } else {
+      this.logger.error('Missing UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN environment variables');
+      this.client = new Redis({ url: 'https://fake-url.upstash.io', token: 'fake' });
     }
   }
 
+  async onModuleDestroy() {
+  }
+
+  async get<T = string>(key: string): Promise<T | null> {
+    const data = await this.client.get<T>(key);
+    return data;
+  }
+
   async set(key: string, value: unknown, ttlSeconds?: number): Promise<void> {
-    const data = typeof value === 'string' ? value : JSON.stringify(value);
     if (ttlSeconds) {
-      await this.client.set(key, data, 'EX', ttlSeconds);
+      await this.client.set(key, value, { ex: ttlSeconds });
     } else {
-      await this.client.set(key, data);
+      await this.client.set(key, value);
     }
   }
 
@@ -60,11 +49,11 @@ export class RedisService implements OnModuleDestroy {
   }
 
   async zadd(key: string, score: number, member: string): Promise<void> {
-    await this.client.zadd(key, score, member);
+    await this.client.zadd(key, { score, member });
   }
 
   async zrevrange(key: string, start: number, stop: number): Promise<string[]> {
-    return this.client.zrevrange(key, start, stop);
+    return this.client.zrange(key, start, stop, { rev: true });
   }
 
   async zrevrangeWithScores(
@@ -72,15 +61,23 @@ export class RedisService implements OnModuleDestroy {
     start: number,
     stop: number,
   ): Promise<{ member: string; score: number }[]> {
-    const result = await this.client.zrevrange(key, start, stop, 'WITHSCORES');
-    
-    // Parse the flat array into member/score pairs
+    const result = await this.client.zrange(key, start, stop, { rev: true, withScores: true }) as any[];
     const entries: { member: string; score: number }[] = [];
-    for (let i = 0; i < result.length; i += 2) {
-      entries.push({
-        member: result[i],
-        score: parseFloat(result[i + 1]),
-      });
+    
+    if (result && result.length > 0 && typeof result[0] !== 'object') {
+      for (let i = 0; i < result.length; i += 2) {
+        entries.push({
+          member: String(result[i]),
+          score: Number(result[i + 1]),
+        });
+      }
+    } else if (result && result.length > 0 && typeof result[0] === 'object') {
+       for (const item of result) {
+         entries.push({
+           member: String(item.member || item.value),
+           score: Number(item.score),
+         });
+       }
     }
     return entries;
   }

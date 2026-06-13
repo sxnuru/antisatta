@@ -1,0 +1,360 @@
+// prisma/schema.prisma
+// MatchMarket — Complete Production Database Schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────
+
+enum UserRole {
+  USER
+  MODERATOR
+  ADMIN
+}
+
+enum MarketStatus {
+  DRAFT
+  PENDING_APPROVAL
+  OPEN
+  LOCKED
+  RESOLVED
+  CANCELLED
+}
+
+enum MarketType {
+  FIFA_MATCH
+  COMMUNITY
+}
+
+enum MarketCategory {
+  FIFA_WORLD_CUP
+  CHAMPIONS_LEAGUE
+  PREMIER_LEAGUE
+  LA_LIGA
+  SERIE_A
+  BUNDESLIGA
+  LIGUE_1
+  INTERNATIONAL
+  TRANSFER
+  PLAYER_PERFORMANCE
+  CUSTOM
+}
+
+enum PredictionStatus {
+  ACTIVE
+  WON
+  LOST
+  REFUNDED
+}
+
+enum RewardType {
+  SIGNUP_BONUS
+  DAILY_LOGIN
+  WEEKLY_STREAK
+  ACHIEVEMENT
+  MARKET_CREATOR
+  PREDICTION_WIN
+  RECOVERY
+}
+
+enum AuditAction {
+  LOGIN
+  LOGOUT
+  REGISTER
+  PASSWORD_RESET
+  PREDICTION_PLACED
+  PREDICTION_WON
+  PREDICTION_LOST
+  MARKET_CREATED
+  MARKET_APPROVED
+  MARKET_REJECTED
+  MARKET_RESOLVED
+  MARKET_CANCELLED
+  TOKENS_EARNED
+  TOKENS_SPENT
+  RECOVERY_CLAIMED
+  PROFILE_UPDATED
+  ADMIN_ACTION
+}
+
+// ─────────────────────────────────────────────
+// MODELS
+// ─────────────────────────────────────────────
+
+model User {
+  id                 String    @id @default(uuid()) @db.Uuid
+  username           String    @unique @db.VarChar(50)
+  email              String    @unique @db.VarChar(255)
+  passwordHash       String    @map("password_hash")
+  balance            Int       @default(1000)
+  roi                Decimal   @default(0) @db.Decimal(10, 2)
+  wins               Int       @default(0)
+  losses             Int       @default(0)
+  marketsCreated     Int       @default(0) @map("markets_created")
+  predictionsWon     Int       @default(0) @map("predictions_won")
+  predictionsLost    Int       @default(0) @map("predictions_lost")
+  role               UserRole  @default(USER)
+  recoveryClaims     Int       @default(0) @map("recovery_claims")
+  lastRecoveryClaim  DateTime? @map("last_recovery_claim")
+  loginStreak        Int       @default(0) @map("login_streak")
+  lastLoginDate      DateTime? @map("last_login_date")
+  banned             Boolean   @default(false)
+  banReason          String?   @map("ban_reason")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  markets          Market[]
+  predictions      Prediction[]
+  comments         Comment[]
+  commentLikes     CommentLike[]
+  achievements     UserAchievement[]
+  rewards          Reward[]
+  follows          Follow[]
+  auditLogs        AuditLog[]
+  refreshTokens    RefreshToken[]
+
+  @@index([email])
+  @@index([username])
+  @@index([balance])
+  @@index([role])
+  @@map("users")
+}
+
+model Market {
+  id               String         @id @default(uuid()) @db.Uuid
+  title            String         @db.VarChar(255)
+  description      String
+  category         MarketCategory
+  marketType       MarketType     @map("market_type")
+  status           MarketStatus   @default(DRAFT)
+  creatorId        String         @map("creator_id") @db.Uuid
+  resolutionSource String?        @map("resolution_source")
+  winningOutcomeId String?        @map("winning_outcome_id") @db.Uuid
+  totalPool        Int            @default(0) @map("total_pool")
+  participantCount Int            @default(0) @map("participant_count")
+  startsAt         DateTime?      @map("starts_at")
+  endsAt           DateTime?      @map("ends_at")
+  resolvedAt       DateTime?      @map("resolved_at")
+  featured         Boolean        @default(false)
+
+  // FIFA-specific fields
+  fixtureId    String? @map("fixture_id") @db.VarChar(20)
+  homeTeam     String? @map("home_team") @db.VarChar(100)
+  awayTeam     String? @map("away_team") @db.VarChar(100)
+  homeTeamLogo String? @map("home_team_logo")
+  awayTeamLogo String? @map("away_team_logo")
+  league       String? @db.VarChar(100)
+  leagueLogo   String? @map("league_logo")
+  season       String? @db.VarChar(10)
+  matchScore   String? @map("match_score") @db.VarChar(20)
+  matchStatus  String? @map("match_status") @db.VarChar(30)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  creator     User         @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  outcomes    Outcome[]
+  predictions Prediction[]
+  comments    Comment[]
+  follows     Follow[]
+
+  @@index([status])
+  @@index([creatorId])
+  @@index([category])
+  @@index([marketType])
+  @@index([featured])
+  @@index([endsAt])
+  @@index([fixtureId])
+  @@index([createdAt])
+  @@map("markets")
+}
+
+model Outcome {
+  id          String   @id @default(uuid()) @db.Uuid
+  marketId    String   @map("market_id") @db.Uuid
+  name        String   @db.VarChar(255)
+  poolTokens  Int      @default(0) @map("pool_tokens")
+  probability Decimal  @default(0) @db.Decimal(5, 4)
+  isWinner    Boolean  @default(false) @map("is_winner")
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  market      Market       @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  predictions Prediction[]
+
+  @@index([marketId])
+  @@map("outcomes")
+}
+
+model Prediction {
+  id        String           @id @default(uuid()) @db.Uuid
+  userId    String           @map("user_id") @db.Uuid
+  marketId  String           @map("market_id") @db.Uuid
+  outcomeId String           @map("outcome_id") @db.Uuid
+  stake     Int
+  reward    Int?
+  status    PredictionStatus @default(ACTIVE)
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  // Relations
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  market  Market  @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  outcome Outcome @relation(fields: [outcomeId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([marketId])
+  @@index([outcomeId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("predictions")
+}
+
+model Comment {
+  id         String   @id @default(uuid()) @db.Uuid
+  marketId   String   @map("market_id") @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  content    String
+  parentId   String?  @map("parent_id") @db.Uuid
+  likesCount Int      @default(0) @map("likes_count")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  market  Market        @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  user    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent  Comment?      @relation("CommentReplies", fields: [parentId], references: [id], onDelete: SetNull)
+  replies Comment[]     @relation("CommentReplies")
+  likes   CommentLike[]
+
+  @@index([marketId])
+  @@index([userId])
+  @@index([parentId])
+  @@index([createdAt])
+  @@map("comments")
+}
+
+model CommentLike {
+  id        String   @id @default(uuid()) @db.Uuid
+  commentId String   @map("comment_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  comment Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([commentId, userId])
+  @@map("comment_likes")
+}
+
+model Achievement {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @unique @db.VarChar(100)
+  slug        String   @unique @db.VarChar(100)
+  description String
+  icon        String?
+  reward      Int
+  criteria    Json
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  userAchievements UserAchievement[]
+
+  @@map("achievements")
+}
+
+model UserAchievement {
+  id            String   @id @default(uuid()) @db.Uuid
+  userId        String   @map("user_id") @db.Uuid
+  achievementId String   @map("achievement_id") @db.Uuid
+  earnedAt      DateTime @default(now()) @map("earned_at")
+
+  // Relations
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, achievementId])
+  @@map("user_achievements")
+}
+
+model Reward {
+  id          String     @id @default(uuid()) @db.Uuid
+  userId      String     @map("user_id") @db.Uuid
+  type        RewardType
+  amount      Int
+  description String?
+  createdAt   DateTime   @default(now()) @map("created_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([type])
+  @@index([createdAt])
+  @@map("rewards")
+}
+
+model Follow {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  marketId  String   @map("market_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  market Market @relation(fields: [marketId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, marketId])
+  @@map("follows")
+}
+
+model AuditLog {
+  id        String      @id @default(uuid()) @db.Uuid
+  userId    String?     @map("user_id") @db.Uuid
+  action    AuditAction
+  entity    String?     @db.VarChar(50)
+  entityId  String?     @map("entity_id") @db.Uuid
+  metadata  Json?
+  ipAddress String?     @map("ip_address") @db.VarChar(45)
+  userAgent String?     @map("user_agent")
+  createdAt DateTime    @default(now()) @map("created_at")
+
+  // Relations
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([action])
+  @@index([entity, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  tokenHash String   @map("token_hash")
+  family    String   @db.VarChar(36)
+  revoked   Boolean  @default(false)
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@index([family])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}

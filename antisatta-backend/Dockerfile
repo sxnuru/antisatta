@@ -44,5 +44,5 @@ USER nestjs
 ENV PORT=7860
 EXPOSE 7860
 
-# Run migrations then start the app
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main"]
+# Start the app directly (bypassing migrations to prevent transaction pooler hangs)
+CMD ["node", "dist/main"]

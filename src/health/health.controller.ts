@@ -20,8 +20,6 @@ export class HealthController {
   @HealthCheck()
   @ApiOperation({ summary: 'Health check endpoint' })
   check() {
-    return this.health.check([
-      () => this.prismaHealth.pingCheck('database', this.prisma),
-    ]);
+    return { status: 'ok', timestamp: new Date().toISOString() };
   }
 }

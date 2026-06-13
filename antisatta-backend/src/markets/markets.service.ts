@@ -332,35 +332,61 @@ export class MarketsService {
       const winningPool = winningOutcome.poolTokens;
       const totalPool = market.totalPool;
 
+      const userUpdates = new Map<string, { balanceIncrement: number, wins: number, losses: number }>();
+      const winningPredictionUpdates = [];
+
       for (const pred of market.predictions) {
+        let userStats = userUpdates.get(pred.userId);
+        if (!userStats) {
+          userStats = { balanceIncrement: 0, wins: 0, losses: 0 };
+          userUpdates.set(pred.userId, userStats);
+        }
+
         if (pred.outcomeId === winningOutcomeId) {
-          // If FIFA_MATCH, the reward was locked in at prediction time (Fixed Odds).
-          // Otherwise, calculate Parimutuel reward based on final pools.
           const reward = market.marketType === 'FIFA_MATCH' 
             ? (pred.reward || Math.floor(pred.stake * 2)) // Fallback if reward is missing for some reason
             : this.payout.calculateReward(pred.stake, winningPool, totalPool);
             
-          await tx.prediction.update({ where: { id: pred.id }, data: { status: PredictionStatus.WON, reward } });
-          
-          await tx.user.update({
-            where: { id: pred.userId },
-            data: { 
-              balance: { increment: reward }, 
-              predictionsWon: { increment: 1 },
-              wins: { increment: 1 } 
-            }
-          });
+          userStats.balanceIncrement += reward;
+          userStats.wins += 1;
+
+          winningPredictionUpdates.push(
+            tx.prediction.update({ where: { id: pred.id }, data: { status: PredictionStatus.WON, reward } })
+          );
         } else {
-          await tx.prediction.update({ where: { id: pred.id }, data: { status: PredictionStatus.LOST, reward: 0 } });
-          
-          await tx.user.update({
-            where: { id: pred.userId },
-            data: { 
-              predictionsLost: { increment: 1 },
-              losses: { increment: 1 }
-            }
-          });
+          userStats.losses += 1;
         }
+      }
+
+      // 4. Execute updates efficiently
+      // Update all lost predictions in one query
+      await tx.prediction.updateMany({
+        where: { marketId: id, outcomeId: { not: winningOutcomeId } },
+        data: { status: PredictionStatus.LOST, reward: 0 }
+      });
+
+      // Process winning predictions in chunks
+      const chunkSize = 100;
+      for (let i = 0; i < winningPredictionUpdates.length; i += chunkSize) {
+        await Promise.all(winningPredictionUpdates.slice(i, i + chunkSize));
+      }
+
+      // Process user stats in chunks
+      const userUpdatePromises = Array.from(userUpdates.entries()).map(([userId, stats]) => {
+        return tx.user.update({
+          where: { id: userId },
+          data: { 
+            balance: { increment: stats.balanceIncrement }, 
+            predictionsWon: { increment: stats.wins },
+            wins: { increment: stats.wins },
+            predictionsLost: { increment: stats.losses },
+            losses: { increment: stats.losses }
+          }
+        });
+      });
+
+      for (let i = 0; i < userUpdatePromises.length; i += chunkSize) {
+        await Promise.all(userUpdatePromises.slice(i, i + chunkSize));
       }
 
       await tx.auditLog.create({
@@ -368,6 +394,8 @@ export class MarketsService {
       });
 
       return { success: true };
+    }, {
+      timeout: 120000,
     });
   }
 
@@ -380,15 +408,34 @@ export class MarketsService {
     await this.prisma.$transaction(async (tx) => {
       await tx.market.update({ where: { id }, data: { status: MarketStatus.CANCELLED } });
 
-      // Refund all predictions
+      // Refund all predictions efficiently
+      await tx.prediction.updateMany({ 
+        where: { marketId: id }, 
+        data: { status: PredictionStatus.REFUNDED } 
+      });
+
+      const userRefunds = new Map<string, number>();
       for (const pred of market.predictions) {
-        await tx.prediction.update({ where: { id: pred.id }, data: { status: PredictionStatus.REFUNDED } });
-        await tx.user.update({ where: { id: pred.userId }, data: { balance: { increment: pred.stake } } });
+        userRefunds.set(pred.userId, (userRefunds.get(pred.userId) || 0) + pred.stake);
+      }
+
+      const userUpdatePromises = Array.from(userRefunds.entries()).map(([userId, refundAmount]) => {
+        return tx.user.update({
+          where: { id: userId },
+          data: { balance: { increment: refundAmount } }
+        });
+      });
+
+      const chunkSize = 100;
+      for (let i = 0; i < userUpdatePromises.length; i += chunkSize) {
+        await Promise.all(userUpdatePromises.slice(i, i + chunkSize));
       }
 
       await tx.auditLog.create({
         data: { userId: null, action: AuditAction.MARKET_CANCELLED, entity: 'Market', entityId: id }
       });
+    }, {
+      timeout: 120000,
     });
 
     this.wsService.emitMarketUpdate(id, { status: MarketStatus.CANCELLED });

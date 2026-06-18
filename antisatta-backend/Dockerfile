@@ -36,6 +36,9 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./
 COPY --from=builder /app/prisma ./prisma
 
+# Install OpenSSL for Prisma schema engine
+RUN apk add --no-cache openssl
+
 # Set ownership
 RUN chown -R nestjs:nestjs /app
 
